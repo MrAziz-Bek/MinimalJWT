@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using MinimalJWT.Models;
 using MinimalJWT.Services;
+using System.IdentityModel.Tokens.Jwt;
 
 var builder = WebApplication.CreateBuilder();
 
@@ -37,23 +39,59 @@ app.UseAuthorization();
 app.UseAuthentication();
 
 app.MapGet("/", () => "Hello, World!");
+app.MapPost("/login", (UserLogin user, IUserService service) => Login(user, service));
 app.MapPost("/create", (Movie movie, IMovieService service) => Create(movie, service));
 app.MapGet("/get", (int id, IMovieService service) => Get(id, service));
 app.MapGet("/list", (IMovieService service) => List(service));
 app.MapPut("/update", (Movie newMovie, IMovieService service) => Update(newMovie, service));
 app.MapDelete("/delete", (int id, IMovieService service) => Delete(id, service));
 
+IResult Login(UserLogin user, IUserService service)
+{
+    if (user.Username is not null && user.Password is not null)
+    {
+        var loggedInUser = service.Get(user);
+        if (loggedInUser is null)
+            return Results.NotFound("User not found");
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, loggedInUser.Username),
+            new Claim(ClaimTypes.Email, loggedInUser.EmailAddress),
+            new Claim(ClaimTypes.GivenName, loggedInUser.Firstname),
+            new Claim(ClaimTypes.Surname, loggedInUser.Lastname),
+            new Claim(ClaimTypes.Role, loggedInUser.Role)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: builder.Configuration["JWT:Issuer"],
+            audience: builder.Configuration["JWT:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(60),
+            notBefore: DateTime.UtcNow,
+            signingCredentials: new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Key"])),
+                SecurityAlgorithms.HmacSha256)
+        );
+
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+        return Results.Ok(tokenString);
+    }
+    return Results.BadRequest("Invalid User credentials");
+}
+
 IResult Create(Movie movie, IMovieService service)
 {
     var result = service.Create(movie);
-    return Results.Ok();
+    return Results.Ok(result);
 }
 
 IResult Get(int id, IMovieService service)
 {
     var movie = service.Get(id);
     if (movie is null)
-        return Results.NotFound("Movie not found.");
+        return Results.NotFound("Movie not found");
     return Results.Ok(movie);
 }
 
@@ -65,17 +103,17 @@ IResult Update(Movie newMovie, IMovieService service)
     var updatedMovie = service.Update(newMovie);
     if (updatedMovie is null)
     {
-        return Results.NotFound("Movie not found.");
+        return Results.NotFound("Movie not found");
     }
 
-    return Results.Ok();
+    return Results.Ok(updatedMovie);
 }
 
 IResult Delete(int id, IMovieService service)
 {
     var result = service.Delete(id);
     if (!result)
-        return Results.BadRequest("Something went wrong.");
+        return Results.BadRequest("Something went wrong ");
 
     return Results.Ok(result);
 }
