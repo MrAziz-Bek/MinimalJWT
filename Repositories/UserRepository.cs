@@ -17,12 +17,12 @@ public class UserRepository
         },
         new User()
         {
-            Username = "lydia_standart",
-            EmailAddress = "lydia.standart@email.com",
+            Username = "lydia_standard",
+            EmailAddress = "lydia.standard@email.com",
             Password = "MyPass_w0rd",
             Firstname = "Elyse",
             Lastname = "Burton",
-            Role = "Standart"
+            Role = "Standard"
         }
     };
 }

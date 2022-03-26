@@ -8,8 +8,37 @@ using Microsoft.Extensions.DependencyInjection;
 using MinimalJWT.Models;
 using MinimalJWT.Services;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder();
+
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Name = "Authorization",
+        Description = "Bearer Authentication with JWT Token",
+        Type = SecuritySchemeType.Http,
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Id = "Bearer",
+                    Type = ReferenceType.SecurityScheme
+                }
+            },
+            new List<string>()
+        }
+    });
+});
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
     {
@@ -26,8 +55,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     });
 
 builder.Services.AddAuthorization();
-
-builder.Services.AddSwaggerGen();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<IMovieService, MovieService>();
 builder.Services.AddSingleton<IUserService, UserService>();
@@ -39,12 +66,26 @@ app.UseAuthorization();
 app.UseAuthentication();
 
 app.MapGet("/", () => "Hello, World!");
+
 app.MapPost("/login", (UserLogin user, IUserService service) => Login(user, service));
-app.MapPost("/create", (Movie movie, IMovieService service) => Create(movie, service));
-app.MapGet("/get", (int id, IMovieService service) => Get(id, service));
+
+app.MapPost("/create",
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator")]
+(Movie movie, IMovieService service) => Create(movie, service));
+
+app.MapGet("/get",
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator, Standard")]
+(int id, IMovieService service) => Get(id, service));
+
 app.MapGet("/list", (IMovieService service) => List(service));
-app.MapPut("/update", (Movie newMovie, IMovieService service) => Update(newMovie, service));
-app.MapDelete("/delete", (int id, IMovieService service) => Delete(id, service));
+
+app.MapPut("/update",
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator")]
+(Movie newMovie, IMovieService service) => Update(newMovie, service));
+
+app.MapDelete("/delete",
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator")]
+(int id, IMovieService service) => Delete(id, service));
 
 IResult Login(UserLogin user, IUserService service)
 {
