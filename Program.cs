@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using MinimalJWT.Models;
@@ -6,12 +9,32 @@ using MinimalJWT.Services;
 
 var builder = WebApplication.CreateBuilder();
 
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters()
+        {
+            ValidateActor = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["JWT:Issuer"],
+            ValidAudience = builder.Configuration["JWT:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Key"]))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddSwaggerGen();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<IMovieService, MovieService>();
 builder.Services.AddSingleton<IUserService, UserService>();
 
 var app = builder.Build();
+
+app.UseSwagger();
+app.UseAuthorization();
+app.UseAuthentication();
 
 app.MapGet("/", () => "Hello, World!");
 app.MapPost("/create", (Movie movie, IMovieService service) => Create(movie, service));
@@ -57,4 +80,5 @@ IResult Delete(int id, IMovieService service)
     return Results.Ok(result);
 }
 
+app.UseSwaggerUI();
 app.Run();
